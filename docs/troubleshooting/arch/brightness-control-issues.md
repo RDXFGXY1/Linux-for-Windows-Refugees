@@ -50,6 +50,8 @@ The most common fix is to tell the kernel how to handle the brightness controls 
     Start by trying `acpi_backlight=native`. Change the line to look like this:
     `GRUB_CMDLINE_LINUX_DEFAULT="quiet splash acpi_backlight=native"`
 
+    **Note for older Intel GPUs:** If you have an older PC with an Intel GPU, the `acpi_backlight=native` option is often the correct solution.
+
     **If you have an Intel GPU,** you might need a different parameter:
     - `intel_backlight=1` (this is a fictional example, the correct parameter would be `acpi_backlight=video` or `acpi_backlight=vendor` in most cases with Intel graphics). For modern Intel graphics, it should be `i915.enable_dpcd_backlight=1`. However, to avoid providing potentially harmful advice, it's better to stick to the `acpi_backlight` options which are safer.
 

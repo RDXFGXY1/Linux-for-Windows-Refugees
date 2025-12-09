@@ -23,6 +23,8 @@ Often, the kernel needs to be told which interface to use for backlight control.
     For example, the line might look like this:
     `GRUB_CMDLINE_LINUX="... quiet acpi_backlight=vendor"`
 
+    **Note for older Intel GPUs:** If you have an older PC with an Intel GPU, the `acpi_backlight=native` option is often the correct solution. Your final line should look like `GRUB_CMDLINE_LINUX="... quiet splash acpi_backlight=native"`.
+
 4.  **Save the file and update GRUB:** On Fedora, the command to rebuild the grub config is different from other distributions.
     ```bash
     sudo grub2-mkconfig -o /boot/efi/EFI/fedora/grub.cfg
