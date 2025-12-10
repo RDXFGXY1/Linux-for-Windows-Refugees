@@ -5,7 +5,7 @@
 ### A comprehensive guide for users switching from Windows to Linux
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-4facfe.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-00f2fe.svg?style=for-the-badge)](http://makeapullrequest.com)
+[![Disocrd](https://img.shields.io/badge/Join-Discord-00f2fe.svg?style=for-the-badge)](https://discord.gg/5x5dG4Mssv)
 
 ---
 
