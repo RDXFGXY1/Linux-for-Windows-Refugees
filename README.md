@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQxC82urGX3_0kpt-He3s81g0M2864gSzJlUA&s" width="800" alt="Linux Penguin">
+   
 # Linux for Windows Refugees
 
 ### A comprehensive guide for users switching from Windows to Linux
