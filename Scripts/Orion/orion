@@ -2,7 +2,7 @@
 # ============================================
 #   ORION - Package Update Manager
 #   Author: Ayoub (RDXFGXY1)
-#   Version: 2.1
+#   Version: 2.2
 # ============================================
 set -euo pipefail
 
@@ -151,7 +151,7 @@ update_all_packages() {
     if [ -f "$module" ]; then
       local pkg=$(basename "$module" | sed 's/^update-//')
       
-      log_info "Updating: $pkg"
+      echo -e "${CYAN}=== Updating: $pkg ===${RESET}"
       if update_package "$pkg" "true"; then
         updated=$((updated + 1))
       else
@@ -174,43 +174,68 @@ update_orion_self() {
   local temp_dir="/tmp/orion-update-$(date +%s)"
   mkdir -p "$temp_dir"
   
-  # Download from GitHub
+  # Download from GitHub using curl
   log_info "Downloading latest version..."
   
-  if git clone --depth 1 --branch "$GITHUB_BRANCH" \
-     "https://github.com/$GITHUB_USER/$GITHUB_REPO.git" "$temp_dir" 2>/dev/null; then
-    log_success "Downloaded latest version"
-  else
-    log_error "Failed to download from GitHub"
-    rm -rf "$temp_dir"
-    return 1
-  fi
+  # Files to download
+  local files=(
+    "orion"
+    "install/install.sh"
+    "modules/discord"
+    "README.md"
+    "uninstall.sh"
+  )
   
-  local source_dir="$temp_dir/$GITHUB_PATH"
+  local downloaded=0
+  local failed=0
   
-  if [ ! -d "$source_dir" ]; then
-    log_error "Orion directory not found in repo"
-    rm -rf "$temp_dir"
-    return 1
-  fi
-  
-  # Update main command
-  log_info "Updating main command..."
-  sudo cp "$source_dir/orion" "$(which orion)"
-  sudo chmod +x "$(which orion)"
-  
-  # Update modules
-  log_info "Updating modules..."
-  for module in "$source_dir/modules"/update-*; do
-    if [ -f "$module" ]; then
-      local module_name=$(basename "$module")
-      sudo cp "$module" "$MODULES_DIR/"
-      sudo chmod +x "$MODULES_DIR/$module_name"
-      
-      local version=$(grep -oP '^#\s*Version:\s*\K[\d.]+' "$module" 2>/dev/null || echo "unknown")
-      log_success "Updated: $(echo $module_name | sed 's/^update-//') (v$version)"
+  for file in "${files[@]}"; do
+    local url="https://raw.githubusercontent.com/$GITHUB_USER/$GITHUB_REPO/$GITHUB_BRANCH/Scripts/Orion/$file"
+    local dest="$temp_dir/$file"
+    
+    # Create directory if needed
+    mkdir -p "$(dirname "$dest")"
+    
+    if curl -fsSL "$url" -o "$dest" 2>/dev/null; then
+      downloaded=$((downloaded + 1))
+    else
+      log_warning "Failed to download: $file"
+      failed=$((failed + 1))
     fi
   done
+  
+  if [ $downloaded -eq 0 ]; then
+    log_error "Failed to download any files from GitHub"
+    rm -rf "$temp_dir"
+    return 1
+  fi
+  
+  log_success "Downloaded $downloaded file(s) from GitHub"
+  
+  # Update main command
+  if [ -f "$temp_dir/orion" ]; then
+    log_info "Updating main command..."
+    sudo cp "$temp_dir/orion" "$(which orion)"
+    sudo chmod +x "$(which orion)"
+    log_success "Main command updated"
+  fi
+  
+  # Update modules
+  if [ -d "$temp_dir/modules" ]; then
+    log_info "Updating modules..."
+    for module in "$temp_dir/modules"/*; do
+      if [ -f "$module" ]; then
+        local module_name=$(basename "$module")
+        local module_dest="$MODULES_DIR/update-$module_name"
+        
+        sudo cp "$module" "$module_dest"
+        sudo chmod +x "$module_dest"
+        
+        local version=$(grep -oP '^#\s*Version:\s*\K[\d.]+' "$module" 2>/dev/null || echo "unknown")
+        log_success "Updated: $module_name (v$version)"
+      fi
+    done
+  fi
   
   # Cleanup
   rm -rf "$temp_dir"
@@ -223,7 +248,7 @@ update_orion_self() {
 show_help() {
   cat << EOF
 ${CYAN}${BOLD}Orion - Package Update Manager${RESET}
-Version: 2.1
+Version: 2.2
 
 ${CYAN}Usage:${RESET}
   orion [OPTION] [PACKAGE]
@@ -254,7 +279,7 @@ EOF
 }
 
 show_version() {
-  echo "Orion Package Manager v2.1"
+  echo "Orion Package Manager v2.2"
   echo "Installation: $INSTALL_DIR"
   echo "Modules: $(find "$MODULES_DIR" -name 'update-*' | wc -l)"
 }

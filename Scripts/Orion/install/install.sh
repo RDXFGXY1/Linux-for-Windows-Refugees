@@ -3,7 +3,7 @@
 #   ORION LOCAL INSTALLER
 #   Installs Orion from local files
 #   Author: Ayoub (RDXFGXY1)
-#   Version: 2.1
+#   Version: 2.2
 # ============================================
 set -euo pipefail
 
@@ -15,8 +15,8 @@ BIN_DIR="/usr/local/bin"
 COMMAND_NAME="orion"
 MODULES_DIR="modules"
 
-# Current script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Current script directory (now in install/ directory)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # -------------------------
 #  COLORS
@@ -32,6 +32,21 @@ CYAN="${ESC}36m"
 # -------------------------
 #  HELPER FUNCTIONS
 # -------------------------
+print_header() {
+  echo -e "${CYAN}${BOLD}"
+  cat << "EOF"
+  ╔═══════════════════════════════════════════════╗
+  ║                                               ║
+  ║        📦  ORION SETUP  📦                   ║
+  ║                                               ║
+  ║      Package Update System for Linux          ║
+  ║         Local Installation                    ║
+  ║                                               ║
+  ╚═══════════════════════════════════════════════╝
+EOF
+  echo -e "${RESET}"
+}
+
 log_info() {
   echo -e "${CYAN}[INFO]${RESET} $*"
 }
@@ -78,6 +93,7 @@ install_main_command() {
   
   if [ ! -f "$src_file" ]; then
     log_error "Main command file not found: $src_file"
+    log_info "Looking in: $SCRIPT_DIR"
     return 1
   fi
   
@@ -101,22 +117,27 @@ install_modules() {
   
   local count=0
   
-  for module in "$src_dir"/*; do
-    if [ -f "$module" ] && [ -x "$module" ] || [[ "$module" =~ \.(sh|bash)$ ]]; then
-      local module_name=$(basename "$module")
-      sudo cp "$module" "$dest_dir/"
-      sudo chmod +x "$dest_dir/$module_name"
-      
-      # Extract version if present
-      local version
-      version=$(grep -oP '^#\s*Version:\s*\K[\d.]+' "$module" 2>/dev/null || echo "unknown")
-      
-      log_success "Installed: $module_name (v$version)"
-      count=$((count + 1))
-    fi
+  # Install all module files
+  find "$src_dir" -type f | while read -r module; do
+    local module_name=$(basename "$module")
+    local module_dest="$dest_dir/update-$module_name"
+    
+    sudo cp "$module" "$module_dest"
+    sudo chmod +x "$module_dest"
+    
+    # Extract version if present
+    local version
+    version=$(grep -oP '^#\s*Version:\s*\K[\d.]+' "$module" 2>/dev/null || echo "unknown")
+    
+    log_success "Installed: $module_name (v$version)"
+    count=$((count + 1))
   done
   
-  log_success "Installed $count module(s)"
+  if [ $count -eq 0 ]; then
+    log_warning "No modules found in $src_dir"
+  else
+    log_success "Installed $count module(s)"
+  fi
   return 0
 }
 
@@ -133,6 +154,21 @@ setup_logging() {
   log_success "Logging setup completed"
 }
 
+install_uninstaller() {
+  log_info "Installing uninstaller..."
+  
+  local src_file="$SCRIPT_DIR/uninstall.sh"
+  local dest_dir="$INSTALL_DIR"
+  
+  if [ -f "$src_file" ]; then
+    sudo cp "$src_file" "$dest_dir/"
+    sudo chmod +x "$dest_dir/uninstall.sh"
+    log_success "Uninstaller installed at $dest_dir/uninstall.sh"
+  else
+    log_warning "Uninstaller not found: $src_file"
+  fi
+}
+
 verify_installation() {
   log_info "Verifying installation..."
   
@@ -142,6 +178,8 @@ verify_installation() {
   if [ ! -x "$BIN_DIR/$COMMAND_NAME" ]; then
     log_error "Main command not found or not executable"
     errors=$((errors + 1))
+  else
+    log_success "Main command verified: $BIN_DIR/$COMMAND_NAME"
   fi
   
   # Check modules
@@ -149,13 +187,13 @@ verify_installation() {
   module_count=$(find "$INSTALL_DIR/$MODULES_DIR" -type f -executable 2>/dev/null | wc -l)
   
   if [ "$module_count" -eq 0 ]; then
-    log_warning "No modules found"
+    log_warning "No executable modules found"
   else
     log_success "Found $module_count module(s)"
   fi
   
   if [ $errors -eq 0 ]; then
-    log_success "Installation verified"
+    log_success "Installation verified successfully"
     return 0
   else
     log_error "Verification failed with $errors error(s)"
@@ -163,12 +201,63 @@ verify_installation() {
   fi
 }
 
+show_success() {
+  echo
+  echo -e "${GREEN}${BOLD}╔═══════════════════════════════════════════════╗${RESET}"
+  echo -e "${GREEN}${BOLD}║                                               ║${RESET}"
+  echo -e "${GREEN}${BOLD}║        ✓ Installation Complete! ✓            ║${RESET}"
+  echo -e "${GREEN}${BOLD}║                                               ║${RESET}"
+  echo -e "${GREEN}${BOLD}╚═══════════════════════════════════════════════╝${RESET}"
+  echo
+  
+  echo -e "${CYAN}${BOLD}Command installed:${RESET} $COMMAND_NAME"
+  echo
+  
+  echo -e "${CYAN}${BOLD}Quick Start:${RESET}"
+  echo -e "  ${YELLOW}$COMMAND_NAME -l${RESET}                List available packages"
+  echo -e "  ${YELLOW}$COMMAND_NAME -u discord${RESET}        Update Discord"
+  echo -e "  ${YELLOW}$COMMAND_NAME -a${RESET}                Update all packages"
+  echo -e "  ${YELLOW}$COMMAND_NAME --help${RESET}            Show help"
+  echo
+  
+  echo -e "${CYAN}${BOLD}Installation Details:${RESET}"
+  echo -e "  Command:        $BIN_DIR/$COMMAND_NAME"
+  echo -e "  Modules:        $INSTALL_DIR/$MODULES_DIR/"
+  echo -e "  Logs:           $INSTALL_DIR/logs/"
+  
+  if [ -f "$INSTALL_DIR/uninstall.sh" ]; then
+    echo -e "  Uninstaller:    sudo $INSTALL_DIR/uninstall.sh"
+  fi
+  echo
+  
+  # List installed modules
+  if [ -d "$INSTALL_DIR/$MODULES_DIR" ]; then
+    echo -e "${CYAN}${BOLD}Installed Packages:${RESET}"
+    for module in "$INSTALL_DIR/$MODULES_DIR"/update-*; do
+      if [ -f "$module" ]; then
+        local pkg=$(basename "$module" | sed 's/^update-//')
+        local version=$(grep -oP '^#\s*Version:\s*\K[\d.]+' "$module" 2>/dev/null || echo "")
+        if [ -n "$version" ]; then
+          echo -e "  ${GREEN}✓${RESET} $pkg ${CYAN}(v$version)${RESET}"
+        else
+          echo -e "  ${GREEN}✓${RESET} $pkg"
+        fi
+      fi
+    done
+  fi
+  
+  echo
+  echo -e "${GREEN}Happy updating! 🚀${RESET}"
+  echo
+}
+
 # -------------------------
 #  MAIN EXECUTION
 # -------------------------
 main() {
-  echo
-  log_info "Starting Orion installation..."
+  print_header
+  
+  echo -e "${CYAN}Installing Orion Package Manager...${RESET}"
   echo
   
   check_root
@@ -178,6 +267,7 @@ main() {
   echo
   
   if ! install_main_command; then
+    log_error "Failed to install main command"
     exit 1
   fi
   
@@ -189,19 +279,16 @@ main() {
   
   echo
   
+  install_uninstaller
+  
+  echo
+  
   setup_logging
   
   echo
   
   if verify_installation; then
-    log_success "Orion installation completed successfully!"
-    
-    echo
-    echo -e "${CYAN}${BOLD}Installation Summary:${RESET}"
-    echo -e "  Command:  $BIN_DIR/$COMMAND_NAME"
-    echo -e "  Modules:  $INSTALL_DIR/$MODULES_DIR/"
-    echo -e "  Logs:     $INSTALL_DIR/logs/"
-    echo
+    show_success
   else
     log_error "Installation incomplete"
     exit 1

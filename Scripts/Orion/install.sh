@@ -3,7 +3,7 @@
 #   ORION INSTALLER - GITHUB DOWNLOADER
 #   Downloads everything from GitHub
 #   Author: Ayoub (RDXFGXY1)
-#   Version: 2.1
+#   Version: 2.2
 # ============================================
 set -euo pipefail
 
@@ -61,47 +61,81 @@ log_error() {
 check_dependencies() {
   log_info "Checking dependencies..."
   
-  if ! command -v git >/dev/null 2>&1; then
-    log_error "Git is required but not installed."
+  if ! command -v curl >/dev/null 2>&1; then
+    log_error "curl is required but not installed."
     log_info "Install it with your package manager:"
-    log_info "  Debian/Ubuntu:  sudo apt install git"
-    log_info "  Arch Linux:     sudo pacman -S git"
-    log_info "  Fedora:         sudo dnf install git"
+    log_info "  Debian/Ubuntu:  sudo apt install curl"
+    log_info "  Arch Linux:     sudo pacman -S curl"
+    log_info "  Fedora:         sudo dnf install curl"
     exit 1
   fi
   
-  log_success "Git is available"
+  log_success "curl is available"
 }
 
-download_from_github() {
-  log_info "Downloading Orion from GitHub..."
+download_specific_files() {
+  log_info "Downloading Orion files from GitHub..."
   
   mkdir -p "$TEMP_DIR"
   
-  # Clone only the Orion directory using sparse checkout
-  cd "$TEMP_DIR"
+  # Files to download
+  local files=(
+    "orion"
+    "install/install.sh"
+    "modules/discord"
+    "README.md"
+    "uninstall.sh"
+  )
   
-  if git clone --depth 1 --branch "$BRANCH" --filter=blob:none --sparse "$REPO_URL" . 2>/dev/null; then
-    git sparse-checkout init --cone 2>/dev/null || true
-    git sparse-checkout set "$SCRIPT_DIR" 2>/dev/null || true
-    log_success "Downloaded files from GitHub"
-    return 0
-  else
-    log_error "Failed to download from GitHub"
-    return 1
+  local downloaded=0
+  local failed=0
+  
+  for file in "${files[@]}"; do
+    local url="https://raw.githubusercontent.com/RDXFGXY1/Linux-Setup-for-Ex-Windows-Users/$BRANCH/Scripts/Orion/$file"
+    local dest="$TEMP_DIR/$file"
+    
+    # Create directory if needed
+    mkdir -p "$(dirname "$dest")"
+    
+    log_info "Downloading: $file"
+    if curl -fsSL "$url" -o "$dest" 2>/dev/null; then
+      downloaded=$((downloaded + 1))
+    else
+      log_error "Failed to download: $file"
+      failed=$((failed + 1))
+    fi
+  done
+  
+  if [ $downloaded -gt 0 ]; then
+    log_success "Downloaded $downloaded file(s)"
   fi
+  
+  if [ $failed -gt 0 ]; then
+    log_warning "Failed to download $failed file(s)"
+  fi
+  
+  return $failed
 }
 
 run_installer() {
-  local installer_path="$TEMP_DIR/$SCRIPT_DIR/install"
+  local installer_path="$TEMP_DIR/install/install.sh"
   
   if [ ! -f "$installer_path" ]; then
-    log_error "Installer not found in downloaded files"
+    log_error "Installer not found at: $installer_path"
     return 1
   fi
   
   log_info "Running local installer..."
   chmod +x "$installer_path"
+  
+  # Check if we have the orion file
+  if [ ! -f "$TEMP_DIR/orion" ]; then
+    log_error "Main orion command not found in downloaded files"
+    return 1
+  fi
+  
+  # Copy files to current directory for the installer
+  cp -r "$TEMP_DIR"/* .
   
   if bash "$installer_path"; then
     log_success "Local installation completed"
@@ -130,9 +164,9 @@ main() {
   
   check_dependencies
   
-  # Download from GitHub
-  if ! download_from_github; then
-    exit 1
+  # Download files
+  if ! download_specific_files; then
+    log_warning "Some files failed to download, but continuing..."
   fi
   
   echo
