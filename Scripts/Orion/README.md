@@ -78,6 +78,28 @@ pkgup -u discord
 
 # Skip confirmation prompts (useful for scripts/automation)
 pkgup -u discord --yes
+
+# Force tarball installation (bypass package managers)
+pkgup -u discord -t
+
+# Force tarball installation without confirmation
+pkgup -u discord -t -y
+```
+
+**Forced Tarball Installation:**
+
+The `--tarball` or `-t` flag allows you to bypass automatic distribution detection and package manager installation methods, installing Discord directly from the tarball distribution. This is useful when:
+
+- You want consistent installation across different distributions
+- You encounter issues with distribution-specific package managers
+- You prefer a universal installation method independent of system package management
+- You're automating installation in containerized or minimal environments
+
+Example usage:
+```bash
+orion -u discord --tarball           # Update Discord using tarball method
+orion -u discord -t                  # Short form of the above
+orion -u discord -t -y               # Tarball method without confirmation
 ```
 
 **Examples by Distribution:**

@@ -2,8 +2,8 @@
 # ============================================
 #   DISCORD AUTO-UPDATER
 #   Author: RDXFGXY1
-#   Version: 3.0
-#   Description: Discord updater with multi-distro support (Debian, Fedora, Arch, SUSE)
+#   Version: 3.1
+#   Description: Discord updater with multi-distro support and forced tarball mode (Debian, Fedora, Arch, SUSE)
 #   Usage: update-discord [--yes|-y]
 # ============================================
 
@@ -638,12 +638,80 @@ main() {
   echo -e "${YELLOW}Installing Discord...${RESET}"
   local install_success=false
   
-  case "$DETECTED_DISTRO" in
-    debian)
-      if install_discord_debian; then
-        install_success=true
-      else
-        echo -e "${YELLOW}Debian package installation failed, trying Flatpak fallback...${RESET}"
+  # Check if forced tarball installation is requested
+  if [ "${ORION_FORCE_TARBALL:-false}" = "true" ]; then
+    log "Forced tarball installation requested via ORION_FORCE_TARBALL"
+    echo -e "${CYAN}[Tarball] Installing Discord via tarball (forced mode)...${RESET}"
+    if install_discord_tarball; then
+      install_success=true
+      INSTALL_METHOD="tarball-forced"
+    fi
+  else
+    # Standard multi-method installation with fallback chain
+    case "$DETECTED_DISTRO" in
+      debian)
+        if install_discord_debian; then
+          install_success=true
+        else
+          echo -e "${YELLOW}Debian package installation failed, trying Flatpak fallback...${RESET}"
+          if install_discord_flatpak; then
+            install_success=true
+          else
+            echo -e "${YELLOW}Flatpak installation failed, trying tarball fallback...${RESET}"
+            if install_discord_tarball; then
+              install_success=true
+            fi
+          fi
+        fi
+        ;;
+      fedora)
+        if install_discord_fedora; then
+          install_success=true
+        else
+          echo -e "${YELLOW}Fedora package installation failed, trying Flatpak fallback...${RESET}"
+          if install_discord_flatpak; then
+            install_success=true
+          else
+            echo -e "${YELLOW}Flatpak installation failed, trying tarball fallback...${RESET}"
+            if install_discord_tarball; then
+              install_success=true
+            fi
+          fi
+        fi
+        ;;
+      arch)
+        if install_discord_arch; then
+          install_success=true
+        else
+          echo -e "${YELLOW}Arch/AUR installation failed, trying Flatpak fallback...${RESET}"
+          if install_discord_flatpak; then
+            install_success=true
+          else
+            echo -e "${YELLOW}Flatpak installation failed, trying tarball fallback...${RESET}"
+            if install_discord_tarball; then
+              install_success=true
+            fi
+          fi
+        fi
+        ;;
+      suse)
+        if install_discord_suse; then
+          install_success=true
+        else
+          echo -e "${YELLOW}SUSE package installation failed, trying Flatpak fallback...${RESET}"
+          if install_discord_flatpak; then
+            install_success=true
+          else
+            echo -e "${YELLOW}Flatpak installation failed, trying tarball fallback...${RESET}"
+            if install_discord_tarball; then
+              install_success=true
+            fi
+          fi
+        fi
+        ;;
+      *)
+        # Unknown distro - try Flatpak first, then tarball
+        echo -e "${YELLOW}Unknown distribution detected, trying Flatpak...${RESET}"
         if install_discord_flatpak; then
           install_success=true
         else
@@ -652,66 +720,9 @@ main() {
             install_success=true
           fi
         fi
-      fi
-      ;;
-    fedora)
-      if install_discord_fedora; then
-        install_success=true
-      else
-        echo -e "${YELLOW}Fedora package installation failed, trying Flatpak fallback...${RESET}"
-        if install_discord_flatpak; then
-          install_success=true
-        else
-          echo -e "${YELLOW}Flatpak installation failed, trying tarball fallback...${RESET}"
-          if install_discord_tarball; then
-            install_success=true
-          fi
-        fi
-      fi
-      ;;
-    arch)
-      if install_discord_arch; then
-        install_success=true
-      else
-        echo -e "${YELLOW}Arch/AUR installation failed, trying Flatpak fallback...${RESET}"
-        if install_discord_flatpak; then
-          install_success=true
-        else
-          echo -e "${YELLOW}Flatpak installation failed, trying tarball fallback...${RESET}"
-          if install_discord_tarball; then
-            install_success=true
-          fi
-        fi
-      fi
-      ;;
-    suse)
-      if install_discord_suse; then
-        install_success=true
-      else
-        echo -e "${YELLOW}SUSE package installation failed, trying Flatpak fallback...${RESET}"
-        if install_discord_flatpak; then
-          install_success=true
-        else
-          echo -e "${YELLOW}Flatpak installation failed, trying tarball fallback...${RESET}"
-          if install_discord_tarball; then
-            install_success=true
-          fi
-        fi
-      fi
-      ;;
-    *)
-      # Unknown distro - try Flatpak first, then tarball
-      echo -e "${YELLOW}Unknown distribution detected, trying Flatpak...${RESET}"
-      if install_discord_flatpak; then
-        install_success=true
-      else
-        echo -e "${YELLOW}Flatpak installation failed, trying tarball fallback...${RESET}"
-        if install_discord_tarball; then
-          install_success=true
-        fi
-      fi
-      ;;
-  esac
+        ;;
+    esac
+  fi
   
   if [ "$install_success" = false ]; then
     echo -e "${RED}${BOLD}Installation failed.${RESET}"

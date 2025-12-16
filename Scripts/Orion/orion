@@ -2,7 +2,7 @@
 # ============================================
 #   ORION - Package Update Manager
 #   Author: Ayoub (RDXFGXY1)
-#   Version: 2.2
+#   Version: 2.3
 # ============================================
 set -euo pipefail
 
@@ -52,6 +52,52 @@ log_error() {
 }
 
 # -------------------------
+#  VERSION CHECK FUNCTION
+# -------------------------
+check_for_updates() {
+  # Extract current version from this script
+  local current_version
+  current_version=$(grep -oP '^#\s*Version:\s*\K[\d.]+' "$0" 2>/dev/null) || return 0
+  
+  # Check if curl is available
+  if ! command -v curl >/dev/null 2>&1; then
+    return 0
+  fi
+  
+  # Construct GitHub raw content URL
+  local github_url="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${GITHUB_PATH}/orion"
+  
+  # Fetch remote version (first 20 lines only, with timeout)
+  local remote_content
+  remote_content=$(curl -sL --max-time 3 "$github_url" 2>/dev/null | head -n 20) || return 0
+  
+  # Parse remote version
+  local remote_version
+  remote_version=$(echo "$remote_content" | grep -oP '^#\s*Version:\s*\K[\d.]+' 2>/dev/null) || return 0
+  
+  # Skip if no valid version found
+  if [ -z "$remote_version" ] || [ -z "$current_version" ]; then
+    return 0
+  fi
+  
+  # Compare versions (using version comparison)
+  # Convert versions to comparable format: e.g., "2.3" -> 0203
+  local current_comparable
+  local remote_comparable
+  
+  current_comparable=$(echo "$current_version" | awk -F. '{printf "%d%02d", $1, $2}')
+  remote_comparable=$(echo "$remote_version" | awk -F. '{printf "%d%02d", $1, $2}')
+  
+  # Display message only if remote version is newer
+  if [ "$remote_comparable" -gt "$current_comparable" ]; then
+    log_info "New Orion version available: ${current_version} → ${remote_version}"
+    log_info "Update with: orion -s"
+  fi
+  
+  return 0
+}
+
+# -------------------------
 #  MODULE FUNCTIONS
 # -------------------------
 list_modules() {
@@ -93,6 +139,7 @@ list_modules() {
 update_package() {
   local pkg="$1"
   local bypass="$2"
+  local tarball_mode="$3"
   local module_file="$MODULES_DIR/update-$pkg"
   local log_file="$LOG_DIR/update-$pkg-$(date +%Y%m%d-%H%M%S).log"
   
@@ -118,7 +165,11 @@ update_package() {
   # Create log directory if needed
   mkdir -p "$LOG_DIR"
   
-  # Execute module with logging
+  # Execute module with logging and export tarball flag if set
+  if [ "$tarball_mode" = "true" ]; then
+    export ORION_FORCE_TARBALL="true"
+  fi
+  
   if bash "$module_file" 2>&1 | tee "$log_file"; then
     log_success "$pkg updated successfully"
     log_info "Log saved: $log_file"
@@ -248,7 +299,7 @@ update_orion_self() {
 show_help() {
   cat << EOF
 ${CYAN}${BOLD}Orion - Package Update Manager${RESET}
-Version: 2.2
+Version: 2.3
 
 ${CYAN}Usage:${RESET}
   orion [OPTION] [PACKAGE]
@@ -258,6 +309,7 @@ ${CYAN}Options:${RESET}
   -u, --update PACKAGE    Update specific package
   -a, --all               Update all packages
   -y, --yes               Bypass confirmation prompts
+  -t, --tarball           Force tarball installation (bypass package managers)
   -s, --self              Update Orion itself from GitHub
   -h, --help              Show this help message
   -v, --version           Show version
@@ -266,6 +318,8 @@ ${CYAN}Examples:${RESET}
   orion -l                 List all packages
   orion -u discord         Update Discord
   orion -u discord -y      Update Discord without confirmation
+  orion -u discord -t      Update Discord using tarball method
+  orion -u discord -t -y   Update Discord via tarball without confirmation
   orion -a                 Update all packages (with confirmation)
   orion -a -y              Update all packages (no confirmation)
   orion -s                 Update Orion from GitHub
@@ -279,7 +333,7 @@ EOF
 }
 
 show_version() {
-  echo "Orion Package Manager v2.2"
+  echo "Orion Package Manager v2.3"
   echo "Installation: $INSTALL_DIR"
   echo "Modules: $(find "$MODULES_DIR" -name 'update-*' | wc -l)"
 }
@@ -291,6 +345,7 @@ main() {
   local action=""
   local package=""
   local bypass="false"
+  local tarball_mode="false"
   
   # Parse arguments
   while [[ $# -gt 0 ]]; do
@@ -319,6 +374,10 @@ main() {
         bypass="true"
         shift
         ;;
+      -t|--tarball)
+        tarball_mode="true"
+        shift
+        ;;
       -s|--self)
         action="self"
         shift
@@ -340,6 +399,9 @@ main() {
     esac
   done
   
+  # Check for updates (non-blocking, runs in background)
+  check_for_updates 2>/dev/null || true &
+  
   # Default action if none specified
   if [ -z "$action" ]; then
     show_help
@@ -352,7 +414,7 @@ main() {
       list_modules
       ;;
     update)
-      update_package "$package" "$bypass"
+      update_package "$package" "$bypass" "$tarball_mode"
       ;;
     all)
       update_all_packages "$bypass"
